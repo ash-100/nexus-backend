@@ -19,7 +19,8 @@ app.use(cors({
         'http://localhost:5173',
         'http://192.168.1.20:8080',
         'http://192.168.1.20:3000',
-        'http://192.168.1.20:5173'
+        'http://192.168.1.20:5173',
+        'https://preview--creative-content-manager.lovable.app',
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
