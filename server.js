@@ -28,6 +28,7 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.options('*', cors());
 
 // Initialize Supabase client
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
