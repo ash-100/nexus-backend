@@ -195,6 +195,23 @@ app.get('/api/operational_metadata', async (req, res) => {
         }
 
         if (data) {
+            // Parse custom fields if they exist
+            let parsedCustomFields = {};
+            if (data.custom_fields) {
+                try {
+                    if (typeof data.custom_fields === 'string') {
+                        parsedCustomFields = JSON.parse(data.custom_fields);
+                    } else if (typeof data.custom_fields === 'object') {
+                        parsedCustomFields = data.custom_fields;
+                    }
+                    console.log('Parsed custom fields:', parsedCustomFields);
+                } catch (parseError) {
+                    console.error('Error parsing custom fields:', parseError);
+                    console.error('Raw custom_fields value:', data.custom_fields);
+                    parsedCustomFields = {};
+                }
+            }
+
             // Transform the data to match the expected API format
             const transformedData = {
                 ambient_audio_vol: Number(data.ambient_audio_vol),
@@ -215,8 +232,8 @@ app.get('/api/operational_metadata', async (req, res) => {
                 show_aruco_overlay: data.show_aruco_overlay,
                 spot_uuid: data.spot_uuid,
                 timezone_identifier: data.timezone_identifier,
-                // Include custom fields if they exist
-                ...(data.custom_fields && typeof data.custom_fields === 'object' ? data.custom_fields : {})
+                // Include parsed custom fields
+                ...parsedCustomFields
             };
             res.json(transformedData);
         } else {
@@ -244,10 +261,28 @@ app.post('/api/config', async (req, res) => {
         }
 
         if (data) {
+            // Parse custom fields if they exist
+            let parsedCustomFields = {};
+            if (data.custom_fields) {
+                try {
+                    if (typeof data.custom_fields === 'string') {
+                        parsedCustomFields = JSON.parse(data.custom_fields);
+                    } else if (typeof data.custom_fields === 'object') {
+                        parsedCustomFields = data.custom_fields;
+                    }
+                    console.log('Screen config parsed custom fields:', parsedCustomFields);
+                } catch (parseError) {
+                    console.error('Error parsing screen config custom fields:', parseError);
+                    console.error('Raw custom_fields value:', data.custom_fields);
+                    parsedCustomFields = {};
+                }
+            }
+
             const transformedData = {
                 animation_config: data.animation_config,
                 screen_config: data.screen_config,
-                ...(data.custom_fields && typeof data.custom_fields === 'object' ? data.custom_fields : {}),
+                // Include parsed custom fields
+                ...parsedCustomFields
             };
             res.json(transformedData);
         } else {
@@ -387,12 +422,12 @@ app.get('/api/campaign-updates', (req, res) => {
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-    res.json({ status: 'OK', message: 'Creative Content Manager Backend is running' });
+    res.json({ status: 'OK', message: 'NEXUS Backend is running' });
 });
 
 // Start server
 app.listen(PORT, () => {
-    console.log(`🚀 Creative Content Manager Backend running on port ${PORT}`);
+    console.log(`🚀 NEXUS Backend running on port ${PORT}`);
     console.log(`📊 API endpoints available:`);
     console.log(`   GET http://localhost:${PORT}/api/content_plan`);
     console.log(`   GET http://localhost:${PORT}/api/operational_metadata`);
