@@ -318,6 +318,13 @@ Example: /api/media?assetId=12345678-1234-1234-1234-123456789abc`);
             return res.status(404).send(`Error: Creative with asset ID "${assetId}" not found`);
         }
 
+        // Check if vast_xml is available and use it if present
+        if (creative.vast_xml) {
+            res.set('Content-Type', 'application/xml');
+            return res.send(creative.vast_xml);
+        }
+
+
         // Calculate duration in HH:MM:SS format
         const durationSeconds = Math.floor(creative.duration / 1000);
         const hours = Math.floor(durationSeconds / 3600);
@@ -384,6 +391,7 @@ app.put('/api/campaign/:campaignRun', async (req, res) => {
             .from('creatives')
             .update({
                 updated_at: new Date().toISOString(),
+                campaign_data: campaignData
             })
             .eq('campaign_run', campaignRun)
             .select()
