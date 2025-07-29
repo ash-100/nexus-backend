@@ -42,45 +42,6 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// In-memory storage for campaign data updates
-const campaignDataUpdates = new Map();
-
-// Deep merge utility function
-function mergeDeep(target, source) {
-    const output = Object.assign({}, target);
-    if (isObject(target) && isObject(source)) {
-        Object.keys(source).forEach(key => {
-            if (isObject(source[key])) {
-                if (!(key in target))
-                    Object.assign(output, { [key]: source[key] });
-                else
-                    output[key] = mergeDeep(target[key], source[key]);
-            } else {
-                Object.assign(output, { [key]: source[key] });
-            }
-        });
-    }
-    return output;
-}
-
-function isObject(item) {
-    return (item && typeof item === "object" && !Array.isArray(item));
-}
-
-// Mock content plan data (you can replace this with actual database queries)
-const mockContentPlan = {
-    publisher_content: [],
-    campaign_data: [],
-    campaign_orders: [],
-    super_loop: {},
-    priority_campaign_orders: [],
-    vistar_config: {
-        enabled: false,
-        base_url: "",
-        publisher_id: ""
-    }
-};
-
 // API Routes
 
 // 1. Content Plan API
@@ -97,6 +58,8 @@ app.get('/api/content_plan', async (req, res) => {
             return res.status(500).json({ error: 'Failed to fetch creatives data' });
         }
 
+        console.log(JSON.stringify(creativesData, null, 2));
+
         // Build content plan from database creatives
         const publisherContent = (creativesData || []).map(creative => ({
             campaign_run: creative.campaign_run,
@@ -104,54 +67,12 @@ app.get('/api/content_plan', async (req, res) => {
         }));
 
         // Build campaign data
-        const campaignData = (creativesData || []).reduce((acc, creative) => {
-            const defaultCampaignData = {
-                asset: {
-                    id: creative.asset_id,
-                    type: "ADONMO",
-                    qr_data: {
-                        qr_enabled: false,
-                        qr_data: `https://api.adonmo.com/qr/${creative.campaign_run}/<device_uuid>`,
-                        qr_x: 0,
-                        qr_y: 0,
-                        qr_height: 0,
-                    },
-                    show_panel_info_overlay: false,
-                    vast_config: {
-                        uri: "",
-                        enabled: false,
-                        internal: false,
-                        impression_uris: null,
-                        ima_adtag: "",
-                        user_agent_header: "",
-                        cache_refresh_seconds: 0,
-                        cache_on_creative_id: false,
-                        object_fit: "CONTAIN",
-                        include_device_id: false,
-                    },
-                    lemma_config: {
-                        enabled: false,
-                        base_uri: "",
-                        publisher_id: "",
-                    },
-                    object_fit: "CONTAIN",
-                },
-                hour_overrides: {},
-                muted: false,
-                audible: creative.type === 'image' ? false : true,
-            };
-
-            // Merge with any stored updates
-            const storedUpdates = campaignDataUpdates.get(creative.campaign_run);
-            if (storedUpdates) {
-                // Deep merge the stored updates with default data
-                acc[creative.campaign_run] = mergeDeep(defaultCampaignData, storedUpdates);
-            } else {
-                acc[creative.campaign_run] = defaultCampaignData;
+        let campaignData = new Map();
+        (creativesData || []).forEach(creative => {
+            if (creative.campaign_run && creative.campaign_data) {
+                campaignData.set(creative.campaign_run, creative.campaign_data);
             }
-
-            return acc;
-        }, {});
+        })
 
         // Build super_loop with the same structure as publisher_content
         const superLoop = publisherContent.map(item => ({
@@ -161,7 +82,7 @@ app.get('/api/content_plan', async (req, res) => {
 
         const contentPlan = {
             publisher_content: publisherContent,
-            campaign_data: campaignData,
+            campaign_data: Object.fromEntries(campaignData),
             campaign_orders: [],
             super_loop: superLoop,
             priority_campaign_orders: [],
@@ -339,27 +260,27 @@ Example: /api/media?assetId=12345678-1234-1234-1234-123456789abc`);
 
         // Generate VAST XML with real data
         const vastXml = `<?xml version="1.0" encoding="UTF-8"?>
-<VAST version="4.0">
-  <Ad id="${assetId}">
-    <InLine>
-      <AdSystem version="1.0">Creative Content Manager</AdSystem>
-      <AdTitle>${creative.filename || 'Creative'}</AdTitle>
-      <Impression><![CDATA[https://api.adonmo.com/impression/${creative.campaign_run}]]></Impression>
-      <Creatives>
-        <Creative id="${assetId}-creative">
-          <Linear>
-            <Duration>${durationFormatted}</Duration>
-            <MediaFiles>
-              <MediaFile delivery="progressive" type="${mimeType}" width="1080" height="1920">
-                <![CDATA[${creative.file_url}]]>
-              </MediaFile>
-            </MediaFiles>
-          </Linear>
-        </Creative>
-      </Creatives>
-    </InLine>
-  </Ad>
-</VAST>`;
+                        <VAST version="4.0">
+                        <Ad id="${assetId}">
+                            <InLine>
+                            <AdSystem version="1.0">Creative Content Manager</AdSystem>
+                            <AdTitle>${creative.filename || 'Creative'}</AdTitle>
+                            <Impression><![CDATA[https://api.adonmo.com/impression/${creative.campaign_run}]]></Impression>
+                            <Creatives>
+                                <Creative id="${assetId}-creative">
+                                <Linear>
+                                    <Duration>${durationFormatted}</Duration>
+                                    <MediaFiles>
+                                    <MediaFile delivery="progressive" type="${mimeType}" width="1080" height="1920">
+                                        <![CDATA[${creative.file_url}]]>
+                                    </MediaFile>
+                                    </MediaFiles>
+                                </Linear>
+                                </Creative>
+                            </Creatives>
+                            </InLine>
+                        </Ad>
+                        </VAST>`;
 
         res.set('Content-Type', 'application/xml');
         res.send(vastXml);
@@ -380,11 +301,8 @@ app.put('/api/campaign/:campaignRun', async (req, res) => {
             return res.status(400).json({ error: 'Campaign run is required' });
         }
 
-        // Store the campaign data updates in memory
-        campaignDataUpdates.set(campaignRun, campaignData);
 
         console.log(`Campaign data updated for ${campaignRun}:`, campaignData);
-        console.log(`Total stored campaigns: ${campaignDataUpdates.size}`);
 
         // Just update the timestamp to show activity
         const { data, error } = await supabase
@@ -414,20 +332,6 @@ app.put('/api/campaign/:campaignRun', async (req, res) => {
     }
 });
 
-// 6. Get Campaign Data Updates (for debugging)
-app.get('/api/campaign-updates', (req, res) => {
-    const updates = {};
-    campaignDataUpdates.forEach((value, key) => {
-        updates[key] = value;
-    });
-
-    res.json({
-        message: 'Current campaign data updates',
-        total_campaigns: campaignDataUpdates.size,
-        updates: updates
-    });
-});
-
 // Health check endpoint
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', message: 'NEXUS Backend is running' });
@@ -442,7 +346,7 @@ app.listen(PORT, () => {
     console.log(`   POST http://localhost:${PORT}/api/config`);
     console.log(`   GET http://localhost:${PORT}/api/media?assetId=<asset_id>`);
     console.log(`   PUT http://localhost:${PORT}/api/campaign/<campaign_run>`);
-    console.log(`   GET http://localhost:${PORT}/api/campaign-updates`);
+
     console.log(`   GET http://localhost:${PORT}/health`);
 });
 
