@@ -60,6 +60,37 @@ app.get('/api/content_plan', async (req, res) => {
 
         console.log(JSON.stringify(creativesData, null, 2));
 
+        // Fetch ambient audio settings from operational_metadata
+        const { data: ambientData, error: ambientError } = await supabase
+            .from('operational_metadata')
+            .select('ambient_uuid, ambient_url, ambient_audio_vol, custom_fields')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+        if (ambientError) {
+            console.error('Error fetching ambient settings:', ambientError);
+        }
+
+        // Parse ambient audio settings
+        let ambientAudioSettings = null;
+        if (ambientData) {
+            const customFields = ambientData.custom_fields || {};
+            const isEnabled = customFields.ambient_audio_enabled === true;
+
+            if (isEnabled && ambientData.ambient_url) {
+                ambientAudioSettings = {
+                    enabled: isEnabled,
+                    ambient_uuid: ambientData.ambient_uuid,
+                    ambient_url: ambientData.ambient_url,
+                    ambient_audio_vol: Number(ambientData.ambient_audio_vol) || 0.5
+                };
+            }
+        }
+
+        console.log('Ambient audio settings:', ambientAudioSettings);
+
+
         // Build content plan from database creatives
         const publisherContent = (creativesData || []).map(creative => ({
             campaign_run: creative.campaign_run,
@@ -90,7 +121,8 @@ app.get('/api/content_plan', async (req, res) => {
                 enabled: false,
                 base_url: "",
                 publisher_id: ""
-            }
+            },
+            ambient_audio_settings: ambientAudioSettings, // Add ambient audio settings
         };
 
         res.json(contentPlan);
